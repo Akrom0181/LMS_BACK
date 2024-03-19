@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"lms_back/models"
 	"lms_back/pkg"
+	"strconv"
 
 	"github.com/google/uuid"
 )
@@ -21,6 +22,29 @@ func NewGroup(db *sql.DB) GroupRepo {
 
 func (g *GroupRepo) Create(group models.Group) (string, error) {
 	id := uuid.New()
+	var group_unique_id string
+
+	maxQuery := `
+	SELECT MAX(group_id) 
+	FROM "group"
+	`
+	err := g.db.QueryRow(maxQuery).Scan(&group_unique_id)
+	if err != nil {
+		if err.Error() != "can't scan into dest[0]: cannot scan null into *string" && err.Error() != "no rows in result set" {
+			return "resp", err
+		} else {
+			group_unique_id = "GR-0000000"
+		}
+	}
+
+	digit := 0
+	if len(group_unique_id) > 2 {
+		digit, err = strconv.Atoi(group_unique_id[3:])
+		if err != nil {
+			return "resp", err
+		}
+	}
+
 	query := `INSERT INTO "group" (
 		id,
 		group_id,
@@ -30,9 +54,10 @@ func (g *GroupRepo) Create(group models.Group) (string, error) {
 		created_at) 
 		VALUES($1,$2,$3,$4,$5,CURRENT_TIMESTAMP)
 		`
-	_, err := g.db.Exec(query,
+
+	_, err = g.db.Exec(query,
 		id.String(),
-		group.Group_id,
+		"Gr-"+pkg.GetSerialId(digit),
 		group.Branch_id,
 		group.Teacher_id,
 		group.Type)
@@ -100,27 +125,27 @@ func (g *GroupRepo) GetAll(req models.GetAllGroupsRequest) (models.GetAllGroupsR
 			return resp, err
 		}
 		group.Updated_at = pkg.NullStringToString(updateAt)
+		group.Teacher_id = pkg.NullStringToString(teacher_id)
 		resp.Groups = append(resp.Groups, group)
 	}
 	return resp, nil
 }
 
 func (g *GroupRepo) GetByID(id string) (models.Group, error) {
-    group := models.Group{}
+	group := models.Group{}
 
-    if err := g.db.QueryRow(`SELECT id, group_id, branch_id, teacher_id, type, created_at, updated_at FROM "group" WHERE id = $1`, id).Scan(
-        &group.Id,
-        &group.Group_id,
-        &group.Branch_id,
-        &group.Teacher_id,
-        &group.Type,
-        &group.Created_at,
-        &group.Updated_at); err != nil {
-        return models.Group{}, err
-    }
-    return group, nil
+	if err := g.db.QueryRow(`SELECT id, group_id, branch_id, teacher_id, type, created_at, updated_at FROM "group" WHERE id = $1`, id).Scan(
+		&group.Id,
+		&group.Group_id,
+		&group.Branch_id,
+		&group.Teacher_id,
+		&group.Type,
+		&group.Created_at,
+		&group.Updated_at); err != nil {
+		return models.Group{}, err
+	}
+	return group, nil
 }
-
 
 func (g *GroupRepo) Delete(id string) error {
 	query := `delete from "group" where id = $1`
